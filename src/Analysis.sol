@@ -114,19 +114,19 @@ contract Analysis {
         
         bytes32 pairHash = keccak256(bytes(_pair));
     
-        if (pairHash == keccak256("AVAX/USD")) {
+        if (pairHash == keccak256(bytes("AVAX/USD"))) {
             return (0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7, 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664); // AVAX, USDC
-        } else if (pairHash == keccak256("BTC/USD")) {
+        } else if (pairHash == keccak256(bytes("BTC/USD"))) {
             return (0x50b7545627a5162F82A992c33b87aDc75187B218, 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664); // WBTC, USDC
-        } else if (pairHash == keccak256("ETH/USD")) {
+        } else if (pairHash == keccak256(bytes("ETH/USD"))) {
             return (0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB, 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664); // WETH, USDC
-        } else if (pairHash == keccak256("USDC/USD")) {
+        } else if (pairHash == keccak256(bytes("USDC/USD"))) {
             return (0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664, 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E); // USDC, USD (simulado com USDC.e)
-        } else if (pairHash == keccak256("USDT/USD")) {
+        } else if (pairHash == keccak256(bytes("USDT/USD"))) {
             return (0xc7198437980c041c805A1EDcbA50c1Ce5db95118, 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E); // USDT, USD
-        } else if (pairHash == keccak256("DAI/USD")) {
+        } else if (pairHash == keccak256(bytes("DAI/USD"))) {
             return (0xd586E7F844cEa2F87f50152665BCbc2C279D8d70, 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E); // DAI, USD
-        } else if (pairHash == keccak256("LINK/USD")) {
+        } else if (pairHash == keccak256(bytes("LINK/USD"))) {
             return (0x5947BB275c521040051D82396192181b413227A3, 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664); // LINK, USDC
         }else {
             revert("Unknown Pair");

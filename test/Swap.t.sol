@@ -11,7 +11,7 @@ contract SwapTest is Test {
         swap = new Swap();
     }
 
-    function testGetMediumPriceAVAX() public {
+    function testGetMediumPriceAVAX() public view {
         uint price = swap.getMediumPrice("AVAX/USD");
         console.log("AVAX/USD Price:", price);
         assertGt(price, 0);
