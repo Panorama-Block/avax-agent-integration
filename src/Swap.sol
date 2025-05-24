@@ -5,7 +5,7 @@ import "chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 
-contract AgentInt {
+contract Swap {
     struct PriceFeedInfo {
         string pair;
         AggregatorV3Interface feed;
@@ -21,8 +21,6 @@ contract AgentInt {
         feeds.push(PriceFeedInfo("USDT/USD", AggregatorV3Interface(0xEBE676ee90Fe1112671f19b6B7459bC678B67e8a)));
         feeds.push(PriceFeedInfo("DAI/USD", AggregatorV3Interface(0x51D7180edA2260cc4F6e4EebB82FEF5c3c2B8300)));
         feeds.push(PriceFeedInfo("LINK/USD", AggregatorV3Interface(0x49ccd9ca821EfEab2b98c60dC60F518E765EDe9a)));
-        feeds.push(PriceFeedInfo("EUR/USD", AggregatorV3Interface(0x192f2DBA961Bb0277520C082d6bfa87D5961333E)));
-        feeds.push(PriceFeedInfo("JPY/USD", AggregatorV3Interface(0xf8B283aD4d969ECFD70005714DD5910160565b94)));
     }
 
     function pairFor(address factory, address tokenA, address tokenB) internal pure returns (address pair) {
@@ -48,15 +46,30 @@ contract AgentInt {
         (reserveA, reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
     }
 
-    function getPriceInUniswap(address tokenA, address tokenB, address factory) external view returns (uint256 price) {
+    function getPriceInUniswap(address tokenA, address tokenB) external view returns (uint256 price) {
+        address factory = 0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD;
         address pair = pairFor(factory, tokenA, tokenB);
         require(pair != address(0), "Pair does not exist");
 
         (uint reserveA, uint reserveB) = getReserves(factory, tokenA, tokenB);
         require(reserveA > 0 && reserveB > 0, "No reserves");
 
-        // preço de tokenB em tokenA (quantidade tokenB por 1 tokenA)
         price = reserveB * 1e18 / reserveA;
+    }
+
+    function getPriceInPangolin(address tokenA, address tokenB) public view returns (uint price) {
+        address factory = 0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10;
+        address pair = IUniswapV2Factory(factory).getPair(tokenA, tokenB);
+        require(pair != address(0), "Unexistent pair in Pangolin");
+
+        (uint reserve0, uint reserve1, ) = IUniswapV2Pair(pair).getReserves();
+        address token0 = IUniswapV2Pair(pair).token0();
+
+        if (tokenA == token0) {
+            return (reserve1 * 1e18) / reserve0;
+        } else {
+            return (reserve0 * 1e18) / reserve1;
+        }
     }
 
     function getMediumPrice (string memory _pair) public view returns(uint) {
@@ -75,30 +88,49 @@ contract AgentInt {
         revert("Pair not found");
     }
 
-    function makeSwap (string memory _pair) public payable returns (string memory) {
+    function makeSwap(string memory _pair) public view returns (string memory) {
+        uint marketPrice = getMediumPrice(_pair);
+        
+        (address tokenA, address tokenB) = getTokenAddresses(_pair);
+        uint uniswapPrice = this.getPriceInUniswap(tokenA, tokenB);
+        uint pangolinPrice = this.getPriceInPangolin(tokenA, tokenB);
 
-        // suzaku vai tentar fazer um swap em 3 dex e olhar o preço e o gás que dá
-
-        // verifica na chainlink se ta um bom preço
-
-        // se o preço tiver abaixo da media do mercado e ele for o menor, ele fará considerando um bom negócio
-
-        // se estiver acima nos 3, ele só vai no que deu mais barato mesmo
-
-        // vai pedir autenticação do usuario e as taxas e pagamento
-
-        // vai executar erro se deu algum, ou retornar
+        if (pangolinPrice < uniswapPrice) {
+            if (pangolinPrice <= marketPrice) {
+                return "Good opportunity: Pangolin price is below or equal to market average.";
+            }else{
+                return "Not ideal: price in Pangolin and Uniswap is above market average.";
+            }
+        } else {
+            if (uniswapPrice <= marketPrice) {
+                return "Good opportunity: Uniswap price is below or equal to market average.";
+            }else{
+                return "Not ideal: price in Pangolin and Uniswap is above market average.";
+            }
+        }
     }
 
-    function makeAnalysis (string memory _pair) public payable returns (string memory) {
-
-        // avax vai verificar o preço em 3 dex e olhar o gás
-
-        // verifica na chainlink se ta bom negócio pra fazer
-
-        // se tiver ele vai fazer uma analise que é uma boa hora de fazer operações com o pair_token
-
-        // caso não ele retornará que não vale a pena
+    function getTokenAddresses(string memory _pair) internal pure returns (address tokenA, address tokenB) {
+        
+        bytes32 pairHash = keccak256(bytes(_pair));
+    
+        if (pairHash == keccak256("AVAX/USD")) {
+            return (0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7, 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664); // AVAX, USDC
+        } else if (pairHash == keccak256("BTC/USD")) {
+            return (0x50b7545627a5162F82A992c33b87aDc75187B218, 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664); // WBTC, USDC
+        } else if (pairHash == keccak256("ETH/USD")) {
+            return (0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB, 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664); // WETH, USDC
+        } else if (pairHash == keccak256("USDC/USD")) {
+            return (0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664, 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E); // USDC, USD (simulado com USDC.e)
+        } else if (pairHash == keccak256("USDT/USD")) {
+            return (0xc7198437980c041c805A1EDcbA50c1Ce5db95118, 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E); // USDT, USD
+        } else if (pairHash == keccak256("DAI/USD")) {
+            return (0xd586E7F844cEa2F87f50152665BCbc2C279D8d70, 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E); // DAI, USD
+        } else if (pairHash == keccak256("LINK/USD")) {
+            return (0x5947BB275c521040051D82396192181b413227A3, 0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664); // LINK, USDC
+        }else {
+            revert("Unknown Pair");
+        }
     }
 
     receive() external payable {}
