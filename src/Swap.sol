@@ -5,6 +5,12 @@ import "chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 
+interface IERC20 {
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
+}
+
 contract Swap {
     struct PriceFeedInfo {
         string pair;
@@ -12,8 +18,10 @@ contract Swap {
     }
 
     PriceFeedInfo[] public feeds;
+    address lastSender;
 
     constructor() {
+        lastSender = msg.sender;
         feeds.push(PriceFeedInfo("AVAX/USD", AggregatorV3Interface(0x0A77230d17318075983913bC2145DB16C7366156)));
         feeds.push(PriceFeedInfo("BTC/USD", AggregatorV3Interface(0x2779D32d5166BAaa2B2b658333bA7e6Ec0C65743)));
         feeds.push(PriceFeedInfo("ETH/USD", AggregatorV3Interface(0x976B3D034E162d8bD72D6b9C989d545b839003b0)));
@@ -88,26 +96,58 @@ contract Swap {
         revert("Pair not found");
     }
 
-    function makeSwap(string memory _pair) public view returns (string memory) {
-        uint marketPrice = getMediumPrice(_pair);
+    function makeSwap(string memory _pair, uint amountIn) public returns (string memory, uint amountOut) {
         
+        if (lastSender != msg.sender) {
+            revert("You didn't send gas to finish this automated swap operation");
+        }
+        
+        uint marketPrice = getMediumPrice(_pair);
+
         (address tokenA, address tokenB) = getTokenAddresses(_pair);
+
         uint uniswapPrice = this.getPriceInUniswap(tokenA, tokenB);
         uint pangolinPrice = this.getPriceInPangolin(tokenA, tokenB);
 
+        address factory;
+        address pair;
+        bool usePangolin;
+
         if (pangolinPrice < uniswapPrice) {
             if (pangolinPrice <= marketPrice) {
-                return "Good opportunity: Pangolin price is below or equal to market average.";
-            }else{
-                return "Not ideal: price in Pangolin and Uniswap is above market average.";
+                factory = 0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10;
+                pair = IUniswapV2Factory(factory).getPair(tokenA, tokenB);
+                usePangolin = true;
+            } else {
+                revert("Not ideal: price in Pangolin and Uniswap is above market average.");
             }
         } else {
             if (uniswapPrice <= marketPrice) {
-                return "Good opportunity: Uniswap price is below or equal to market average.";
-            }else{
-                return "Not ideal: price in Pangolin and Uniswap is above market average.";
+                factory = 0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD;
+                pair = pairFor(factory, tokenA, tokenB);
+                usePangolin = false;
+            } else {
+                revert("Not ideal: price in Pangolin and Uniswap is above market average.");
             }
         }
+
+        require(pair != address(0), "Pair not found");
+        require(IERC20(tokenA).transferFrom(msg.sender, address(this), amountIn), "TransferFrom failed");
+        require(IERC20(tokenA).approve(pair, amountIn), "Approve failed");
+
+        (uint reserveA, uint reserveB) = getReserves(factory, tokenA, tokenB);
+        require(reserveA > 0 && reserveB > 0, "No reserves");
+
+        amountOut = ((amountIn * 997) * reserveB) / (reserveA * 1000 + (amountIn * 997));
+
+        require(IERC20(tokenA).transfer(pair, amountIn), "Transfer to pair failed");
+
+        address token0 = IUniswapV2Pair(pair).token0();
+
+        (uint amount0Out, uint amount1Out) = tokenA == token0 ? (uint(0), amountOut) : (amountOut, uint(0));
+
+        IUniswapV2Pair(pair).swap(amount0Out, amount1Out, msg.sender, new bytes(0));
+        return (usePangolin ? "Pangolin" : "Uniswap", amountOut);
     }
 
     function getTokenAddresses(string memory _pair) internal pure returns (address tokenA, address tokenB) {
@@ -133,7 +173,10 @@ contract Swap {
         }
     }
 
-    receive() external payable {}
+    receive() external payable {
+        lastSender = msg.sender;
+    }
+
     fallback() external payable {}
 
     function balance() public view returns (uint) {
