@@ -110,7 +110,7 @@ contract Analysis {
         }
     }
 
-    function getTokenAddresses(string memory _pair) internal pure returns (address tokenA, address tokenB) {
+    function getTokenAddresses(string memory _pair) public pure returns (address tokenA, address tokenB) {
         
         bytes32 pairHash = keccak256(bytes(_pair));
     
